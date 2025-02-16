@@ -1,50 +1,92 @@
 // components/VideoRecorder.tsx
 'use client'
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Camera, Mic, Maximize2, MinimizeIcon } from 'lucide-react';
 import LiveCaptions from './LiveCaptions';
 import RecordingHistory from './RecordingHistory';
 
+interface Recording {
+  timestamp: number;
+  videoKey: string;
+  transcriptionKey: string;
+  transcription: string;
+}
+
 export default function VideoRecorder() {
+  // State management
   const [isRecording, setIsRecording] = useState(false);
-  const [videoUrl, setVideoUrl] = useState(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [transcription, setTranscription] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
-  interface Recording {
-    timestamp: any;
-    videoKey: any;
-    transcriptionKey: any;
-    transcription: string;
-  }
-  
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [devices, setDevices] = useState<{ videoDevices: MediaDeviceInfo[], audioDevices: MediaDeviceInfo[] }>({
+  
+  const [devices, setDevices] = useState<{ 
+    videoDevices: MediaDeviceInfo[], 
+    audioDevices: MediaDeviceInfo[] 
+  }>({
     videoDevices: [],
     audioDevices: []
   });
   const [selectedCamera, setSelectedCamera] = useState('');
   const [selectedMic, setSelectedMic] = useState('');
 
+  // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef([]);
+  const chunksRef = useRef<Blob[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const getAvailableDevices = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      const audioDevices = devices.filter(device => device.kind === 'audioinput');
+      
+      setDevices({ videoDevices, audioDevices });
+      
+      if (videoDevices.length && !selectedCamera) setSelectedCamera(videoDevices[0].deviceId);
+      if (audioDevices.length && !selectedMic) setSelectedMic(audioDevices[0].deviceId);
+    } catch (err) {
+      console.error('Error getting devices:', err);
+    }
+  }, [selectedCamera, selectedMic]);
+
+  const initializeCamera = useCallback(async () => {
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: selectedCamera ? { deviceId: selectedCamera } : true,
+        audio: selectedMic ? { deviceId: selectedMic } : true
+      });
+      
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error('Error accessing camera:', err);
+    }
+  }, [selectedCamera, selectedMic]);
+
   useEffect(() => {
-    initializeCamera();
     getAvailableDevices();
+    initializeCamera();
+    
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [getAvailableDevices, initializeCamera]);
 
   useEffect(() => {
     if (isRecording) {
@@ -64,72 +106,48 @@ export default function VideoRecorder() {
     };
   }, [isRecording]);
 
-  const getAvailableDevices = async () => {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      const audioDevices = devices.filter(device => device.kind === 'audioinput');
-      
-      setDevices({ videoDevices, audioDevices });
-      
-      if (videoDevices.length) setSelectedCamera(videoDevices[0].deviceId);
-      if (audioDevices.length) setSelectedMic(audioDevices[0].deviceId);
-    } catch (err) {
-      console.error('Error getting devices:', err);
-    }
-  };
-
-  const initializeCamera = async () => {
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: selectedCamera ? { deviceId: selectedCamera } : true,
-        audio: selectedMic ? { deviceId: selectedMic } : true
-      });
-      
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error('Error accessing camera:', err);
-    }
-  };
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleDeviceChange = useCallback(async (deviceId: string, type: string) => {
+    if (type === 'video') {
+      setSelectedCamera(deviceId);
+    } else {
+      setSelectedMic(deviceId);
+    }
+
+    if (!isRecording) {
+      await initializeCamera();
+    }
+  }, [isRecording, initializeCamera]);
+
   const startRecording = async () => {
     try {
-      await initializeCamera(); // Reinitialize with both audio and video
+      await initializeCamera();
 
       if (streamRef.current) {
         mediaRecorderRef.current = new MediaRecorder(streamRef.current);
+        chunksRef.current = [];
+        setTranscription('');
+
+        mediaRecorderRef.current.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            chunksRef.current.push(e.data);
+          }
+        };
+
+        mediaRecorderRef.current.onstop = () => {
+          const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+          const url = URL.createObjectURL(blob);
+          setVideoUrl(url);
+        };
+
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
       }
-      mediaRecorderRef.current = mediaRecorderRef.current;
-      chunksRef.current = [];
-      setTranscription('');
-
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
-      };
-
-      mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        setVideoUrl(url);
-      };
-
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
     } catch (err) {
       console.error('Error starting recording:', err);
     }
@@ -140,7 +158,7 @@ export default function VideoRecorder() {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       streamRef.current?.getTracks().forEach((track: MediaStreamTrack) => track.stop());
-      initializeCamera(); // Restart preview
+      initializeCamera();
     }
   };
 
@@ -149,15 +167,11 @@ export default function VideoRecorder() {
 
     setIsUploading(true);
     try {
-      // Fetch the video blob
       const videoBlob = await fetch(videoUrl).then(r => r.blob());
-      
-      // Create form data
       const formData = new FormData();
       formData.append('file', videoBlob, 'recording.webm');
       formData.append('transcription', transcription);
 
-      // Upload to server
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
@@ -165,17 +179,19 @@ export default function VideoRecorder() {
 
       if (!response.ok) throw new Error('Upload failed');
 
-      const result = await response.json();
+      const result: {
+        timestamp: number;
+        videoKey: string;
+        transcriptionKey: string;
+      } = await response.json();
       
-      // Add to recordings history
       setRecordings(prev => [{
         timestamp: result.timestamp,
         videoKey: result.videoKey,
         transcriptionKey: result.transcriptionKey,
-        transcription: transcription,
+        transcription,
       }, ...prev]);
 
-      // Clear current recording
       setVideoUrl(null);
       setTranscription('');
       
@@ -187,35 +203,23 @@ export default function VideoRecorder() {
     }
   };
 
-  const handleDeviceChange = async (deviceId: string, type: string) => {
-    if (type === 'video') {
-      setSelectedCamera(deviceId);
-    } else {
-      setSelectedMic(deviceId);
-    }
-
-    if (!isRecording) {
-      await initializeCamera();
-    }
-  };
-
-  const toggleCamera = () => {
+  const toggleCamera = useCallback(() => {
     setIsCameraOn(prev => !prev);
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach(track => {
         track.enabled = !isCameraOn;
       });
     }
-  };
+  }, [isCameraOn]);
 
-  const toggleMic = () => {
+  const toggleMic = useCallback(() => {
     setIsMicOn(prev => !prev);
     if (streamRef.current) {
       streamRef.current.getAudioTracks().forEach(track => {
         track.enabled = !isMicOn;
       });
     }
-  };
+  }, [isMicOn]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {

@@ -4,7 +4,7 @@ import * as speechsdk from 'microsoft-cognitiveservices-speech-sdk';
 interface LiveCaptionsProps {
   audioStream: MediaStream | null;
   isRecording: boolean;
-  setTranscription: (transcription: string) => void;
+  setTranscription: (transcription: string | ((prev: string) => string)) => void;
 }
 
 const LiveCaptions: React.FC<LiveCaptionsProps> = ({ audioStream, isRecording, setTranscription }) => {
@@ -35,7 +35,8 @@ const LiveCaptions: React.FC<LiveCaptionsProps> = ({ audioStream, isRecording, s
 
     recognizer.recognized = (_: speechsdk.Recognizer, e: speechsdk.SpeechRecognitionEventArgs) => {
       if (e.result.reason === speechsdk.ResultReason.RecognizedSpeech) {
-        setTranscription(prev => `${prev} ${e.result.text}`);
+        setTranscription((prev: string) => `${prev} ${e.result.text}`);
+
         setTempTranscript(''); // Clear temporary transcript
       }
     };

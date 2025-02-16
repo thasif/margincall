@@ -6,7 +6,6 @@ import LiveCaptions from './LiveCaptions';
 const MeetingRoom = ({ roomId }: { roomId: string }) => {
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
-  const [participants, setParticipants] = useState<MediaStream[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [transcription, setTranscription] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
@@ -42,7 +41,9 @@ const MeetingRoom = ({ roomId }: { roomId: string }) => {
         
         // Add local tracks to peer connection
         stream.getTracks().forEach(track => {
-          pc.addTrack(track, stream);
+          if (pc && localStreamRef.current) {
+            pc.addTrack(track, localStreamRef.current);
+          }
         });
         
         // Handle incoming streams
