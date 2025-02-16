@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { listRecordings, getSignedVideoUrl, getFromS3 } from '@/lib/s3';
+import { Readable } from 'stream';
+type S3BodyStream = Readable & {
+  Body?: Readable;
+};
 
 export async function GET() {
   try {
@@ -27,18 +31,18 @@ export async function GET() {
               .replace('videos/', 'transcriptions/')
               .replace(/-[^-]+$/, '-transcription.txt');
 
-            let transcription = '';
-            try {
-              const transcriptionResult = await getFromS3(transcriptionKey);
-              const chunks = [];
-              for await (const chunk of transcriptionResult.Body as any) {
-                chunks.push(chunk);
+              let transcription = '';
+              try {
+                const transcriptionResult = await getFromS3(transcriptionKey);
+                const chunks: Buffer[] = [];
+                for await (const chunk of transcriptionResult.Body as S3BodyStream) {
+                  chunks.push(Buffer.from(chunk));
+                }
+                transcription = Buffer.concat(chunks).toString('utf-8');
+              } catch (error) {
+                console.error('Error fetching transcription:', error);
+                transcription = 'Transcription not available';
               }
-              transcription = Buffer.concat(chunks).toString('utf-8');
-            } catch (error) {
-              console.error('Error fetching transcription:', error);
-              transcription = 'Transcription not available';
-            }
 
             // Extract timestamp from the key (format: videos/timestamp-filename)
             const timestamp = item.Key.split('/')[1].split('-')[0];

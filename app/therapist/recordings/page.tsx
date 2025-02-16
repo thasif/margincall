@@ -1,14 +1,13 @@
 // TherapistRecordingsView.tsx
 'use client'
 import React, { useState, useEffect } from 'react';
-import { Brain } from 'lucide-react';
-import { Recording } from '@/types/therapist';
+import { AIAnalysis, Recording } from '@/types/therapist';
 import AnalysisSection from '@/components/AnalysisSection';
 import VideoList from '@/components/VideoList';
 
 
 // Mock AI analysis function (in production this would come from your backend)
-const generateAIAnalysis = (transcription: string) => ({
+const generateAIAnalysis = () => ({
   emotionalState: {
     primary: 'Anxiety',
     intensity: 'High',
@@ -43,7 +42,7 @@ const generateAIAnalysis = (transcription: string) => ({
 const TherapistRecordingsView = () => {
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  //const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
 
@@ -58,7 +57,7 @@ const TherapistRecordingsView = () => {
       } catch (error) {
         console.error('Error:', error);
       } finally {
-        setIsLoading(false);
+        //setIsLoading(false);
       }
     };
 
@@ -67,7 +66,7 @@ const TherapistRecordingsView = () => {
 
   useEffect(() => {
     if (selectedRecording) {
-      const generatedAnalysis = generateAIAnalysis(selectedRecording.transcription);
+      const generatedAnalysis = generateAIAnalysis();
       setAnalysis(generatedAnalysis);
     } else {
       setAnalysis(null);

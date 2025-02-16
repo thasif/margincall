@@ -1,7 +1,22 @@
 import React from 'react';
 import { AlertTriangle, Brain, Heart, LineChart } from 'lucide-react';
+import type { 
+  AnalysisCardProps, 
+  AnalysisSectionProps 
+} from '@/types/therapist';
 
-const AnalysisCard = ({ title, icon, children, bgColor, iconColor }) => (
+interface ExtendedAnalysisCardProps extends AnalysisCardProps {
+  bgColor: string;
+  iconColor: string;
+}
+
+const AnalysisCard: React.FC<ExtendedAnalysisCardProps> = ({ 
+  title, 
+  icon, 
+  children, 
+  bgColor, 
+  iconColor 
+}) => (
   <div className={`${bgColor} rounded-lg shadow-lg p-6 h-full`}>
     <div className="flex items-center gap-2 mb-4">
       <div className={`${iconColor} p-2 rounded-full bg-white/90`}>
@@ -13,7 +28,7 @@ const AnalysisCard = ({ title, icon, children, bgColor, iconColor }) => (
   </div>
 );
 
-const AnalysisGrid = ({ recording, analysis }) => {
+const AnalysisGrid: React.FC<AnalysisSectionProps> = ({ recording, analysis }) => {
   if (!recording || !analysis) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -46,7 +61,7 @@ const AnalysisGrid = ({ recording, analysis }) => {
           <div>
             <span className="text-gray-600 block mb-2">Triggers:</span>
             <div className="flex flex-wrap gap-2">
-              {analysis.emotionalState.triggers.map((trigger, i) => (
+              {analysis.emotionalState.triggers.map((trigger: string, i: number) => (
                 <span key={i} className="px-3 py-1 bg-white text-red-600 rounded-full text-sm">
                   {trigger}
                 </span>
@@ -71,7 +86,7 @@ const AnalysisGrid = ({ recording, analysis }) => {
           <div>
             <span className="text-gray-600 block mb-2">Key Concerns:</span>
             <ul className="space-y-2">
-              {analysis.riskAssessment.concerns.map((concern, i) => (
+              {analysis.riskAssessment.concerns.map((concern: string, i: number) => (
                 <li key={i} className="flex items-center gap-2 text-gray-700">
                   <div className="w-2 h-2 bg-amber-400 rounded-full"></div>
                   {concern}
@@ -93,7 +108,7 @@ const AnalysisGrid = ({ recording, analysis }) => {
           <div>
             <span className="text-gray-600 block mb-2">Patterns:</span>
             <div className="flex flex-wrap gap-2">
-              {analysis.therapeuticInsights.patterns.map((pattern, i) => (
+              {analysis.therapeuticInsights.patterns.map((pattern: string, i: number) => (
                 <span key={i} className="px-3 py-1 bg-white text-blue-600 rounded-full text-sm">
                   {pattern}
                 </span>
@@ -103,7 +118,7 @@ const AnalysisGrid = ({ recording, analysis }) => {
           <div>
             <span className="text-gray-600 block mb-2">Strengths:</span>
             <div className="flex flex-wrap gap-2">
-              {analysis.therapeuticInsights.strengths.map((strength, i) => (
+              {analysis.therapeuticInsights.strengths.map((strength: string, i: number) => (
                 <span key={i} className="px-3 py-1 bg-white text-green-600 rounded-full text-sm">
                   {strength}
                 </span>
@@ -132,7 +147,7 @@ const AnalysisGrid = ({ recording, analysis }) => {
           <div>
             <span className="text-gray-600 block mb-2">Variations:</span>
             <div className="flex flex-wrap gap-2">
-              {analysis.sentiment.variations.map((variation, i) => (
+              {analysis.sentiment.variations.map((variation: string, i: number) => (
                 <span key={i} className="px-3 py-1 bg-white text-purple-600 rounded-full text-sm">
                   {variation}
                 </span>
