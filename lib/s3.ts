@@ -42,7 +42,7 @@ export async function getSignedVideoUrl(key: string) {
 export async function listRecordings() {
   const command = new ListObjectsV2Command({
     Bucket: process.env.AWS_S3_BUCKET!,
-    Prefix: 'recordings/',
+    Prefix: 'videos/',
     Delimiter: '/'
   });
 
