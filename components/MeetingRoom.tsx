@@ -171,7 +171,8 @@ const MeetingRoom = ({ roomId }: { roomId: string }) => {
         <LiveCaptions
           audioStream={localStreamRef.current}
           isRecording={true}
-          setTranscription={setTranscription}
+          onTranscriptionUpdate={(text) => setTranscription(text)}
+
         />
       )}
 

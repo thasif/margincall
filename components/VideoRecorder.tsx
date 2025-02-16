@@ -1,356 +1,371 @@
-// components/VideoRecorder.tsx
 'use client'
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, Mic, Maximize2, MinimizeIcon } from 'lucide-react';
-import LiveCaptions from './LiveCaptions';
-import RecordingHistory from './RecordingHistory';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Mic, Upload, Clock } from 'lucide-react';
 
-interface Recording {
-  timestamp: number;
-  videoKey: string;
-  transcriptionKey: string;
-  transcription: string;
+// Type definitions for Web Speech API
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
 }
 
-export default function VideoRecorder() {
-  // State management
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: SpeechRecognitionErrorEvent) => void;
+}
+
+// Extend Window interface to include webkitSpeechRecognition
+declare global {
+  interface Window {
+    webkitSpeechRecognition: new () => SpeechRecognition;
+  }
+}
+
+interface Recording {
+  id: number;
+  timestamp: string;
+  videoUrl: string;
+  transcription: string;
+  videoKey?: string;
+  transcriptionKey?: string;
+}
+
+const VideoRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [transcription, setTranscription] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
-  const [recordings, setRecordings] = useState<Recording[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  
-  const [devices, setDevices] = useState<{ 
-    videoDevices: MediaDeviceInfo[], 
-    audioDevices: MediaDeviceInfo[] 
-  }>({
-    videoDevices: [],
-    audioDevices: []
-  });
-  const [selectedCamera, setSelectedCamera] = useState('');
-  const [selectedMic, setSelectedMic] = useState('');
+  const [recordings, setRecordings] = useState<Recording[]>([]);
 
-  // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  const getAvailableDevices = useCallback(async () => {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      const audioDevices = devices.filter(device => device.kind === 'audioinput');
-      
-      setDevices({ videoDevices, audioDevices });
-      
-      if (videoDevices.length && !selectedCamera) setSelectedCamera(videoDevices[0].deviceId);
-      if (audioDevices.length && !selectedMic) setSelectedMic(audioDevices[0].deviceId);
-    } catch (err) {
-      console.error('Error getting devices:', err);
-    }
-  }, [selectedCamera, selectedMic]);
-
-  const initializeCamera = useCallback(async () => {
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: selectedCamera ? { deviceId: selectedCamera } : true,
-        audio: selectedMic ? { deviceId: selectedMic } : true
-      });
-      
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error('Error accessing camera:', err);
-    }
-  }, [selectedCamera, selectedMic]);
-
+  // Initialize camera and speech recognition
   useEffect(() => {
-    getAvailableDevices();
-    initializeCamera();
-    
+    const initializeDevices = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+
+        // Initialize speech recognition
+        if ('webkitSpeechRecognition' in window) {
+          const SpeechRecognition = window.webkitSpeechRecognition;
+          const recognition = new SpeechRecognition();
+          
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          
+          recognition.onresult = (event: SpeechRecognitionEvent) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcript = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                finalTranscript += transcript + ' ';
+              } else {
+                interimTranscript += transcript;
+              }
+            }
+
+            setTranscription(prev => prev + finalTranscript);
+            if (interimTranscript) {
+              // Show interim results in a different style
+              const transcriptElement = document.getElementById('interim-transcript');
+              if (transcriptElement) {
+                transcriptElement.textContent = interimTranscript;
+              }
+            }
+          };
+
+          recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+            console.error('Speech recognition error:', event.error);
+          };
+
+          recognitionRef.current = recognition;
+        }
+      } catch (err) {
+        console.error('Error accessing devices:', err);
+      }
+    };
+
+    initializeDevices();
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
     };
-  }, [getAvailableDevices, initializeCamera]);
+  }, []);
 
+  // Handle recording timer
   useEffect(() => {
     if (isRecording) {
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
     } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
       setRecordingTime(0);
     }
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isRecording]);
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  const startRecording = () => {
+    if (streamRef.current) {
+      // Start media recording
+      mediaRecorderRef.current = new MediaRecorder(streamRef.current);
+      chunksRef.current = [];
+      setTranscription('');
 
-  const handleDeviceChange = useCallback(async (deviceId: string, type: string) => {
-    if (type === 'video') {
-      setSelectedCamera(deviceId);
-    } else {
-      setSelectedMic(deviceId);
-    }
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
 
-    if (!isRecording) {
-      await initializeCamera();
-    }
-  }, [isRecording, initializeCamera]);
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        setVideoUrl(url);
+      };
 
-  const startRecording = async () => {
-    try {
-      await initializeCamera();
-
-      if (streamRef.current) {
-        mediaRecorderRef.current = new MediaRecorder(streamRef.current);
-        chunksRef.current = [];
-        setTranscription('');
-
-        mediaRecorderRef.current.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            chunksRef.current.push(e.data);
-          }
-        };
-
-        mediaRecorderRef.current.onstop = () => {
-          const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-          const url = URL.createObjectURL(blob);
-          setVideoUrl(url);
-        };
-
-        mediaRecorderRef.current.start();
-        setIsRecording(true);
+      mediaRecorderRef.current.start();
+      
+      // Start speech recognition
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
       }
-    } catch (err) {
-      console.error('Error starting recording:', err);
+      
+      setIsRecording(true);
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
       setIsRecording(false);
-      streamRef.current?.getTracks().forEach((track: MediaStreamTrack) => track.stop());
-      initializeCamera();
     }
   };
 
   const handleUpload = async () => {
     if (!videoUrl || !transcription) return;
-
+  
     setIsUploading(true);
     try {
       const videoBlob = await fetch(videoUrl).then(r => r.blob());
       const formData = new FormData();
       formData.append('file', videoBlob, 'recording.webm');
       formData.append('transcription', transcription);
-
+      formData.append('duration', recordingTime.toString());
+  
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
-
+  
       if (!response.ok) throw new Error('Upload failed');
-
-      const result: {
-        timestamp: number;
-        videoKey: string;
-        transcriptionKey: string;
-      } = await response.json();
+  
+      const result = await response.json();
       
-      setRecordings(prev => [{
-        timestamp: result.timestamp,
-        videoKey: result.videoKey,
-        transcriptionKey: result.transcriptionKey,
-        transcription,
-      }, ...prev]);
-
-      setVideoUrl(null);
-      setTranscription('');
-      
+      if (result.success) {
+        const newRecording: Recording = {
+          id: Date.now(),
+          timestamp: new Date().toLocaleString(),
+          videoUrl: videoUrl,
+          transcription: transcription,
+          videoKey: result.videoKey,
+          transcriptionKey: result.transcriptionKey
+        };
+  
+        setRecordings(prev => [newRecording, ...prev]);
+        setVideoUrl(null);
+        setTranscription('');
+      }
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Failed to upload recording. Please try again.');
     } finally {
       setIsUploading(false);
     }
   };
 
-  const toggleCamera = useCallback(() => {
-    setIsCameraOn(prev => !prev);
+  const toggleCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getVideoTracks().forEach(track => {
-        track.enabled = !isCameraOn;
-      });
-    }
-  }, [isCameraOn]);
-
-  const toggleMic = useCallback(() => {
-    setIsMicOn(prev => !prev);
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = !isMicOn;
-      });
-    }
-  }, [isMicOn]);
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
+      const videoTrack = streamRef.current.getVideoTracks()[0];
+      videoTrack.enabled = !isCameraOn;
+      setIsCameraOn(!isCameraOn);
     }
   };
 
+  const toggleMic = () => {
+    if (streamRef.current) {
+      const audioTrack = streamRef.current.getAudioTracks()[0];
+      audioTrack.enabled = !isMicOn;
+      setIsMicOn(!isMicOn);
+    }
+  };
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div ref={containerRef} className="p-6 bg-white rounded-lg shadow-lg max-w-2xl mx-auto">
-      <div className="mb-4 flex gap-4">
-        <select 
-          value={selectedCamera}
-          onChange={(e) => handleDeviceChange(e.target.value, 'video')}
-          className="p-2 border rounded"
-        >
-          {devices.videoDevices.map(device => (
-            <option key={device.deviceId} value={device.deviceId}>
-              {device.label || `Camera ${device.deviceId.slice(0, 5)}`}
-            </option>
-          ))}
-        </select>
-        <select 
-          value={selectedMic}
-          onChange={(e) => handleDeviceChange(e.target.value, 'audio')}
-          className="p-2 border rounded"
-        >
-          {devices.audioDevices.map(device => (
-            <option key={device.deviceId} value={device.deviceId}>
-              {device.label || `Microphone ${device.deviceId.slice(0, 5)}`}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-teal-50 to-blue-50">
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Video Recording Section */}
+          <div className="backdrop-blur-sm bg-white/80 rounded-xl shadow-xl p-6 border border-white/50">
+            <h2 className="text-2xl font-semibold mb-4 text-green-800">Video Recording</h2>
+            <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden relative mb-4 shadow-inner">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+              {videoUrl && !isRecording && (
+                <video
+                  src={videoUrl}
+                  controls
+                  className="absolute inset-0 w-full h-full"
+                />
+              )}
+              
+              {isRecording && (
+                <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full flex items-center gap-2">
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                  {formatTime(recordingTime)}
+                </div>
+              )}
 
-      <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden mb-4 relative">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="w-full h-full object-cover"
-        />
-        {videoUrl && !isRecording && (
-          <video
-            src={videoUrl}
-            controls
-            className="w-full h-full object-cover"
-          />
-        )}
-        
-        {isRecording && (
-          <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full flex items-center gap-2">
-            <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            {formatTime(recordingTime)}
+              <div className="absolute bottom-4 right-4 flex gap-2">
+                <button
+                  onClick={toggleCamera}
+                  className={`p-2 rounded-full ${isCameraOn ? 'bg-green-500' : 'bg-gray-500'} 
+                    shadow-lg transition-all duration-200 hover:scale-105`}
+                >
+                  <Camera className="w-5 h-5 text-white" />
+                </button>
+                <button
+                  onClick={toggleMic}
+                  className={`p-2 rounded-full ${isMicOn ? 'bg-green-500' : 'bg-gray-500'}
+                    shadow-lg transition-all duration-200 hover:scale-105`}
+                >
+                  <Mic className="w-5 h-5 text-white" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-center gap-4">
+              {!isRecording ? (
+                <button
+                  onClick={startRecording}
+                  className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 
+                    flex items-center gap-2 shadow-lg transition-all duration-200 hover:scale-105"
+                >
+                  <div className="w-3 h-3 rounded-full bg-white" />
+                  Start Recording
+                </button>
+              ) : (
+                <button
+                  onClick={stopRecording}
+                  className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600
+                    shadow-lg transition-all duration-200 hover:scale-105"
+                >
+                  Stop Recording
+                </button>
+              )}
+              {videoUrl && !isRecording && (
+                <button
+                  onClick={handleUpload}
+                  disabled={isUploading}
+                  className="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700 
+                    disabled:bg-gray-400 flex items-center gap-2 shadow-lg transition-all duration-200 hover:scale-105"
+                >
+                  <Upload className="w-5 h-5" />
+                  {isUploading ? 'Uploading...' : 'Save Recording'}
+                </button>
+              )}
+            </div>
           </div>
-        )}
 
-        {isRecording && streamRef.current && (
-          <LiveCaptions 
-            audioStream={streamRef.current} 
-            isRecording={isRecording}
-            setTranscription={setTranscription}
-          />
-        )}
+          {/* Live Transcription Section */}
+          <div className="backdrop-blur-sm bg-white/80 rounded-xl shadow-xl p-6 border border-white/50">
+            <h2 className="text-2xl font-semibold mb-4 text-green-800">Live Transcription</h2>
+            <div className="h-[400px] bg-white/50 rounded-lg p-4 overflow-y-auto shadow-inner">
+              {isRecording ? (
+                <>
+                  <p className="whitespace-pre-wrap text-gray-700">{transcription}</p>
+                  <p id="interim-transcript" className="text-gray-500 italic"></p>
+                </>
+              ) : transcription ? (
+                <p className="whitespace-pre-wrap text-gray-700">{transcription}</p>
+              ) : (
+                <p className="text-green-700">
+                  Start recording to see live transcription
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
 
-        <div className="absolute bottom-4 right-4 flex gap-2">
-          <button
-            onClick={toggleCamera}
-            className={`p-2 rounded-full ${isCameraOn ? 'bg-blue-500' : 'bg-gray-500'}`}
-          >
-            <Camera className="w-5 h-5 text-white" />
-          </button>
-          <button
-            onClick={toggleMic}
-            className={`p-2 rounded-full ${isMicOn ? 'bg-blue-500' : 'bg-gray-500'}`}
-          >
-            <Mic className="w-5 h-5 text-white" />
-          </button>
-          <button
-            onClick={toggleFullscreen}
-            className="p-2 rounded-full bg-gray-500"
-          >
-            {isFullscreen ? (
-              <MinimizeIcon className="w-5 h-5 text-white" />
-            ) : (
-              <Maximize2 className="w-5 h-5 text-white" />
-            )}
-          </button>
+        {/* Recording History */}
+        <div className="mt-8 backdrop-blur-sm bg-white/80 rounded-xl shadow-xl p-6 border border-white/50">
+          <h2 className="text-2xl font-semibold mb-4 text-green-800">Recording History</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recordings.map((recording) => (
+              <div key={recording.id} 
+                className="bg-white/50 rounded-lg p-4 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+              >
+                <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden mb-3 shadow-inner">
+                  <video src={recording.videoUrl} controls className="w-full h-full" />
+                </div>
+                <div className="flex items-center gap-2 text-sm text-green-700 mb-2">
+                  <Clock className="w-4 h-4" />
+                  <span>{recording.timestamp}</span>
+                </div>
+                <div className="bg-white/70 rounded p-3 max-h-32 overflow-y-auto shadow-inner">
+                  <p className="text-sm text-gray-700">{recording.transcription}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-
-      <div className="flex gap-4 justify-center mb-4">
-        {!isRecording ? (
-          <button
-            onClick={startRecording}
-            className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 flex items-center gap-2"
-          >
-            <span className="w-3 h-3 rounded-full bg-white" />
-            Record
-          </button>
-        ) : (
-          <button
-            onClick={stopRecording}
-            className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600"
-          >
-            Stop
-          </button>
-        )}
-        {videoUrl && !isRecording && (
-          <button
-            onClick={handleUpload}
-            disabled={isUploading}
-            className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 disabled:bg-gray-400"
-          >
-            {isUploading ? 'Uploading...' : 'Upload & Transcribe'}
-          </button>
-        )}
-      </div>
-
-      {transcription && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-          <h3 className="font-semibold mb-2">Transcription:</h3>
-          <p>{transcription}</p>
-        </div>
-      )}
-      
-      <RecordingHistory recordings={recordings} />
     </div>
   );
-}
+};
+
+export default VideoRecorder;

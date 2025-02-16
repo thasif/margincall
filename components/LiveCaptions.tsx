@@ -1,13 +1,18 @@
+// components/LiveCaptions.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import * as speechsdk from 'microsoft-cognitiveservices-speech-sdk';
 
 interface LiveCaptionsProps {
   audioStream: MediaStream | null;
   isRecording: boolean;
-  setTranscription: (transcription: string | ((prev: string) => string)) => void;
+  onTranscriptionUpdate: (text: string) => void;
 }
 
-const LiveCaptions: React.FC<LiveCaptionsProps> = ({ audioStream, isRecording, setTranscription }) => {
+const LiveCaptions: React.FC<LiveCaptionsProps> = ({ 
+  audioStream, 
+  isRecording, 
+  onTranscriptionUpdate 
+}) => {
   const [tempTranscript, setTempTranscript] = useState<string>('');
   const recognizerRef = useRef<speechsdk.SpeechRecognizer | null>(null);
 
@@ -15,7 +20,7 @@ const LiveCaptions: React.FC<LiveCaptionsProps> = ({ audioStream, isRecording, s
     if (!audioStream || !isRecording) {
       if (recognizerRef.current) {
         recognizerRef.current.stopContinuousRecognitionAsync();
-        recognizerRef.current = null; // Clear the ref
+        recognizerRef.current = null;
       }
       return;
     }
@@ -29,29 +34,15 @@ const LiveCaptions: React.FC<LiveCaptionsProps> = ({ audioStream, isRecording, s
     const audioConfig = speechsdk.AudioConfig.fromStreamInput(audioStream);
     const recognizer = new speechsdk.SpeechRecognizer(speechConfig, audioConfig);
 
-    recognizer.recognizing = (_: speechsdk.Recognizer, e: speechsdk.SpeechRecognitionEventArgs) => {
+    recognizer.recognizing = (_, e) => {
       setTempTranscript(e.result.text);
     };
 
-    recognizer.recognized = (_: speechsdk.Recognizer, e: speechsdk.SpeechRecognitionEventArgs) => {
+    recognizer.recognized = (_, e) => {
       if (e.result.reason === speechsdk.ResultReason.RecognizedSpeech) {
-        setTranscription((prev: string) => `${prev} ${e.result.text}`);
-
-        setTempTranscript(''); // Clear temporary transcript
+        onTranscriptionUpdate(e.result.text);
+        setTempTranscript('');
       }
-    };
-
-    recognizer.sessionStopped = () => {
-      console.log("Speech recognition session stopped");
-      recognizer.stopContinuousRecognitionAsync(); // Ensure it stops
-    };
-
-    recognizer.canceled = (sender: speechsdk.Recognizer, cancellationEventArgs: speechsdk.SpeechRecognitionCanceledEventArgs) => {
-      console.log("Speech recognition canceled: " + cancellationEventArgs.reason);
-      if (cancellationEventArgs.reason === speechsdk.CancellationReason.Error) {
-        console.error("Error details: " + cancellationEventArgs.errorDetails);
-      }
-      recognizer.stopContinuousRecognitionAsync(); // Ensure it stops
     };
 
     recognizer.startContinuousRecognitionAsync();
@@ -62,7 +53,7 @@ const LiveCaptions: React.FC<LiveCaptionsProps> = ({ audioStream, isRecording, s
         recognizerRef.current.stopContinuousRecognitionAsync();
       }
     };
-  }, [audioStream, isRecording, setTranscription]);
+  }, [audioStream, isRecording, onTranscriptionUpdate]);
 
   return (
     <div className="absolute bottom-16 left-0 right-0 p-4">
