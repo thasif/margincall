@@ -39,7 +39,7 @@ const TestimonialsSection = () => {
                 <div className="flex text-yellow-400 mb-2">
                   {'★'.repeat(testimonial.rating)}
                 </div>
-                <p className="text-green-700 italic leading-relaxed">"{testimonial.text}"</p>
+                <p className="text-green-700 italic leading-relaxed">&ldquo;{testimonial.text}&rdquo;</p>
               </div>
               <div className="mt-4 pt-4 border-t border-green-100">
                 <p className="font-semibold text-green-800">{testimonial.author}</p>

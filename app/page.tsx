@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import LandingPage from '@/components/LandingPage';
 import Navigation from '@/components/Navigation';
 import HeroSection from '@/components/HeroSection';
 import FeaturesSection from '@/components/FeaturesSection';
