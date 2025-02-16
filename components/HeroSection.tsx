@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { MessageCircle, Video, Bot } from 'lucide-react';
 
 const HeroSection = () => {
@@ -7,19 +8,22 @@ const HeroSection = () => {
       title: "Anonymous Rant",
       description: "Express freely in a safe space with complete privacy",
       action: "Share now",
-      icon: MessageCircle
+      icon: MessageCircle,
+      link: "/record"
     },
     {
       title: "Video Sessions",
       description: "Direct therapy with flexible scheduling options",
       action: "Book now",
-      icon: Video
+      icon: Video,
+      link: "/therapists"
     },
     {
       title: "AI-Powered Match",
       description: "Get matched with the perfect therapist instantly",
       action: "Get matched",
-      icon: Bot
+      icon: Bot,
+      link: "/therapists"
     }
   ];
 
@@ -36,12 +40,20 @@ const HeroSection = () => {
               Connect with compassionate therapists anonymously. Express freely, heal meaningfully.
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
-              <button className="bg-green-600 text-white px-8 py-4 rounded-lg hover:bg-green-700 transition text-lg">
+              <Link 
+                href="/record" 
+                target="_blank"
+                className="bg-green-600 text-white px-8 py-4 rounded-lg hover:bg-green-700 transition text-lg"
+              >
                 Start Your Journey
-              </button>
-              <button className="border-2 border-green-600 text-green-600 px-8 py-4 rounded-lg hover:bg-green-600 hover:text-white transition text-lg">
+              </Link>
+              <Link 
+                href="/therapists" 
+                target="_blank"
+                className="border-2 border-green-600 text-green-600 px-8 py-4 rounded-lg hover:bg-green-600 hover:text-white transition text-lg"
+              >
                 Find Therapists
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -54,10 +66,14 @@ const HeroSection = () => {
                 </div>
                 <h3 className="text-xl font-semibold mb-4 text-center">{feature.title}</h3>
                 <p className="text-green-700 mb-6 text-center">{feature.description}</p>
-                <button className="w-full text-green-600 font-medium hover:text-green-700 flex items-center justify-center gap-2 group">
+                <Link 
+                  href={feature.link}
+                  target="_blank"
+                  className="w-full text-green-600 font-medium hover:text-green-700 flex items-center justify-center gap-2 group"
+                >
                   {feature.action}
                   <span className="group-hover:translate-x-1 transition-transform">→</span>
-                </button>
+                </Link>
               </div>
             ))}
           </div>

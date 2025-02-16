@@ -10,7 +10,7 @@ const LandingPage = () => {
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-8">
-              <Link href="/" className="text-2xl font-bold">MICO</Link>
+              <Link href="/" className="text-2xl font-bold">Margin Call</Link>
               <div className="hidden md:flex items-center space-x-6">
                 <Link href="#" className="hover:text-green-600 transition">Book a Slot</Link>
                 <Link href="#" className="hover:text-green-600 transition">Find Therapists</Link>

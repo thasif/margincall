@@ -9,21 +9,20 @@ const Navigation = () => {
           <div className="flex items-center space-x-8">
             <Link href="/" className="text-2xl font-bold">Margin Call</Link>
             <div className="hidden md:flex items-center space-x-6">
-              <Link href="#" className="hover:text-green-600 transition">Book a Slot</Link>
-              <Link href="#" className="hover:text-green-600 transition">Find Therapists</Link>
+              <Link href="/therapists" target="_blank" className="hover:text-green-600 transition">Find Therapists</Link>
+              <Link href="/record" target="_blank" className="hover:text-green-600 transition">Rant Space</Link>
+              <Link href="/therapist/recordings" target="_blank" className="hover:text-green-600 transition">For Therapists</Link>
               <Link href="#" className="hover:text-green-600 transition">About us</Link>
-              <Link href="#" className="hover:text-green-600 transition">Rant Space</Link>
-              <Link href="#" className="hover:text-green-600 transition">For Therapists</Link>
               <Link href="#" className="hover:text-green-600 transition">Resources</Link>
             </div>
           </div>
           <div className="flex items-center space-x-4">
             <div className="hidden md:flex items-center space-x-4">
-              {/* Social Media Links */}
               <SocialLinks />
             </div>
             <Link 
               href="/record" 
+              target="_blank"
               className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
             >
               Login
